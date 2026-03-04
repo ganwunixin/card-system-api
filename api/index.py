@@ -1,10 +1,12 @@
-from http.server import BaseHTTPRequestHandler
+from flask import Flask, request, jsonify
 import json
 import hashlib
 import os
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Dict, Tuple, Optional
+
+app = Flask(__name__)
 
 API_SECRET = os.environ.get("API_SECRET", "your-secret-key-change-me")
 
@@ -120,56 +122,42 @@ def revoke_card(conn, card_number: str, software_name: str, reason: str) -> Tupl
     conn.commit()
     return True, "注销成功"
 
-def handler(request):
+@app.route('/')
+def index():
+    return jsonify({'status': 'ok', 'message': 'Card System API is running', 'version': '1.0'})
+
+@app.route('/api', methods=['GET', 'POST'])
+def api():
+    if request.method == 'GET':
+        return jsonify({'status': 'ok', 'message': 'Card System API is running', 'version': '1.0'})
     try:
-        if isinstance(request, dict):
-            body = request.get('body', '{}')
-            data = json.loads(body) if isinstance(body, str) and body else (body if isinstance(body, dict) else {})
-        else:
-            body = request.body.decode('utf-8') if hasattr(request, 'body') else '{}'
-            data = json.loads(body) if body else {}
+        data = request.get_json() or {}
         action = data.get('action', '')
         conn = get_db_connection()
         try:
             if action == 'validate':
                 valid, msg = validate_card_format(data.get('card_number', ''), data.get('software_prefix', ''))
-                return {'success': valid, 'message': msg}
+                return jsonify({'success': valid, 'message': msg})
             elif action == 'activate':
                 valid, msg = validate_card_format(data.get('card_number', ''), data.get('software_prefix', ''))
-                if not valid: return {'success': False, 'message': msg}
+                if not valid: return jsonify({'success': False, 'message': msg})
                 success, msg, info = activate_card(conn, data.get('card_number', ''), data.get('machine_fingerprint', ''))
-                return {'success': success, 'message': msg, 'data': info}
+                return jsonify({'success': success, 'message': msg, 'data': info})
             elif action == 'check':
                 valid, msg = validate_card_format(data.get('card_number', ''), data.get('software_prefix', ''))
-                if not valid: return {'success': False, 'message': msg}
+                if not valid: return jsonify({'success': False, 'message': msg})
                 success, msg, info = check_status(conn, data.get('card_number', ''), data.get('machine_fingerprint', ''))
-                return {'success': success, 'message': msg, 'data': info}
+                return jsonify({'success': success, 'message': msg, 'data': info})
             elif action == 'revoke':
-                if data.get('api_key', '') != API_SECRET: return {'success': False, 'message': '无权限'}
+                if data.get('api_key', '') != API_SECRET: return jsonify({'success': False, 'message': '无权限'})
                 success, msg = revoke_card(conn, data.get('card_number', ''), data.get('software_name', ''), data.get('reason', '管理员注销'))
-                return {'success': success, 'message': msg}
+                return jsonify({'success': success, 'message': msg})
             else:
-                return {'success': False, 'message': '未知操作，请使用: validate, activate, check, revoke'}
+                return jsonify({'success': False, 'message': '未知操作，请使用: validate, activate, check, revoke'})
         finally:
             conn.close()
     except Exception as e:
-        return {'success': False, 'message': f'服务器错误: {str(e)}'}
+        return jsonify({'success': False, 'message': f'服务器错误: {str(e)}'})
 
-class handler_class(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({'status': 'ok', 'message': 'Card System API is running', 'version': '1.0'}, ensure_ascii=False).encode())
-    def do_POST(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else '{}'
-        data = json.loads(body) if body else {}
-        result = handler({'body': body})
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
-
-def main(request):
-    return handler(request)
+if __name__ == '__main__':
+    app.run(debug=True)
