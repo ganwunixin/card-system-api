@@ -1,11 +1,3 @@
 [project]
 name = "card-system-api"
 version = "1.0.0"
-requires-python = ">=3.9"
-dependencies = [
-    "flask>=2.0.0",
-]
-
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
