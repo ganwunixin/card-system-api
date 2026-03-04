@@ -1,0 +1,6 @@
+# Vercel Python Runtime Requirements
+# No external dependencies required for basic SQLite operation
+# Add psycopg2-binary if using PostgreSQL
+
+# For PostgreSQL support (optional):
+# psycopg2-binary==2.9.9
