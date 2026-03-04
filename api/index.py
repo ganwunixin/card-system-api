@@ -184,4 +184,5 @@ def api():
         return jsonify({'success': False, 'message': f'服务器错误: {str(e)}'})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
