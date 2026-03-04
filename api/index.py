@@ -3,7 +3,7 @@ import json
 import hashlib
 import os
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Tuple, Optional
 
 app = Flask(__name__)
@@ -12,6 +12,11 @@ API_SECRET = os.environ.get("API_SECRET", "your-secret-key-change-me")
 
 TURSO_URL = os.environ.get("TURSO_URL", "https://card-system-ganwunixin.aws-ap-south-1.turso.io")
 TURSO_TOKEN = os.environ.get("TURSO_TOKEN", "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzI2NTA5MTgsImlkIjoiMDE5Y2JhMzYtNjUwMS03NTY5LTgwODMtZGEwOTliYTQwZmJlIiwicmlkIjoiYWFhMjNmOWQtYjIyZS00Yzg0LTlkNTgtZDI4YzAxZTMxMmNlIn0.2o64nupMcudyS6GP2iJ3wjyrdWabkEsZQSfhF1UTGYHGAxFvud_g5UtFBHzZ9IqeXffziCR3rrvnIEj5Laa3BQ")
+
+BEIJING_TZ = timezone(timedelta(hours=8))
+
+def get_beijing_time():
+    return datetime.now(BEIJING_TZ).replace(tzinfo=None)
 
 CARD_TYPES = {
     "1H": {"name": "1小时卡", "duration": timedelta(hours=1)},
@@ -91,7 +96,7 @@ def activate_card(card_number: str, machine_fingerprint: str) -> Tuple[bool, str
         if expire_time_str and expire_time_str != PERMANENT_CARD_EXPIRE:
             try:
                 expire_time = datetime.strptime(expire_time_str, "%Y-%m-%d %H:%M:%S")
-                if datetime.now() > expire_time:
+                if get_beijing_time() > expire_time:
                     execute_sql("UPDATE cards SET status = '已过期' WHERE card_number = ?", [card_number])
                     card_info['status'] = '已过期'
                     return False, "卡密已过期，请联系客服续费", card_info
@@ -102,7 +107,7 @@ def activate_card(card_number: str, machine_fingerprint: str) -> Tuple[bool, str
     
     type_code = card_number.split('-')[1]
     card_type_info = CARD_TYPES.get(type_code, {})
-    activate_time = datetime.now()
+    activate_time = get_beijing_time()
     if card_type_info.get("permanent"):
         expire_time = PERMANENT_CARD_EXPIRE
     else:
@@ -131,18 +136,18 @@ def check_status(card_number: str, machine_fingerprint: str) -> Tuple[bool, str,
     if expire_time_str and expire_time_str != PERMANENT_CARD_EXPIRE:
         try:
             expire_time = datetime.strptime(expire_time_str, "%Y-%m-%d %H:%M:%S")
-            if datetime.now() > expire_time:
+            if get_beijing_time() > expire_time:
                 execute_sql("UPDATE cards SET status = '已过期' WHERE card_number = ?", [card_number])
                 return False, "卡密已过期", card_info
         except ValueError: pass
     execute_sql("UPDATE cards SET last_validate_time = ? WHERE card_number = ?", 
-                [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), card_number])
+                [get_beijing_time().strftime("%Y-%m-%d %H:%M:%S"), card_number])
     return True, "验证通过", card_info
 
 def revoke_card(card_number: str, software_name: str, reason: str) -> Tuple[bool, str]:
     if check_revocation(card_number): return False, "卡密已注销"
     execute_sql("INSERT INTO card_revocation (card_number, software_name, revoke_time, revoke_reason) VALUES (?, ?, ?, ?)", 
-                [card_number, software_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), reason])
+                [card_number, software_name, get_beijing_time().strftime("%Y-%m-%d %H:%M:%S"), reason])
     execute_sql("UPDATE cards SET status = '已注销' WHERE card_number = ?", [card_number])
     return True, "注销成功"
 
